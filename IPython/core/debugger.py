@@ -249,6 +249,42 @@ class Pdb(OldPdb):
         OldPdb.do_frame(self, arg)
         self.shell.set_completer_frame(self.curframe)
 
+    def new_do_debug(self, arg):
+        sys.settrace(None)
+        globals = self.curframe.f_globals
+        locals = self.curframe_locals
+        p = Pdb(color_scheme='Linux', completekey=self.completekey,
+                stdin=self.stdin, stdout=self.stdout)
+        p.prompt = "(%s) " % self.prompt.strip()
+        print >>self.stdout, "ENTERING RECURSIVE DEBUGGER"
+        sys.call_tracing(p.run, (arg, globals, locals))
+        print >>self.stdout, "LEAVING RECURSIVE DEBUGGER"
+        sys.settrace(self.trace_dispatch)
+        self.lastcmd = p.lastcmd
+
+    def run(self, cmd, globals=None, locals=None):
+        from bdb import BdbQuit
+        import types
+
+        if globals is None:
+            import __main__
+            globals = __main__.__dict__
+        if locals is None:
+            locals = globals
+        self.reset()
+        sys.settrace(self.trace_dispatch)
+        if not isinstance(cmd, types.CodeType):
+            cmd = cmd+'\n'
+        try:
+            exec cmd in globals, locals
+        except BdbQuit:
+            pass
+        finally:
+            self.quitting = 1
+            sys.settrace(None)
+
+    do_debug = decorate_fn_with_doc(new_do_debug, OldPdb.do_debug)
+
     def new_do_quit(self, arg):
 
         if hasattr(self, 'old_all_completions'):
